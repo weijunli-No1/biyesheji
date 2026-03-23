@@ -1,0 +1,30 @@
+# ===== Frontend =====
+frontend/node_modules/
+frontend/dist/
+frontend/.env.local
+frontend/.env.*.local
+
+# ===== Backend =====
+backend/target/
+backend/.mvn/wrapper/maven-wrapper.jar
+backend/*.iml
+*.class
+*.jar
+!**/src/main/**/target/
+!**/src/test/**/target/
+
+# ===== IDE =====
+.idea/
+*.iml
+*.iws
+*.ipr
+.vscode/settings.json
+.DS_Store
+
+# ===== Logs =====
+*.log
+logs/
+
+# ===== Env =====
+.env
+.env.local
