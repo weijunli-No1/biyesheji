@@ -1,3 +1,8 @@
+-- =====================================================================
+-- 毕设管理系统 完整初始化脚本 (V2)
+-- 包含所有表结构 + 初始数据
+-- =====================================================================
+
 CREATE DATABASE IF NOT EXISTS biyesheji DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 USE biyesheji;
 
@@ -52,6 +57,8 @@ CREATE TABLE IF NOT EXISTS `user` (
     `email`       VARCHAR(128) COMMENT '邮箱',
     `phone`       VARCHAR(20) COMMENT '手机号',
     `avatar`      VARCHAR(255) COMMENT '头像URL',
+    `title`       VARCHAR(32) COMMENT '职称（教师：副教授/教授等）',
+    `department`  VARCHAR(64) COMMENT '院系/部门名称（冗余快照）',
     `status`      TINYINT NOT NULL DEFAULT 1 COMMENT '1正常 0禁用',
     `deleted`     TINYINT NOT NULL DEFAULT 0,
     `create_time` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -167,15 +174,17 @@ CREATE TABLE IF NOT EXISTS `proposal` (
 
 -- ===================== 指导日志表 =====================
 CREATE TABLE IF NOT EXISTS `guidance_log` (
-    `id`            BIGINT NOT NULL AUTO_INCREMENT,
-    `selection_id`  BIGINT NOT NULL,
-    `student_id`    BIGINT NOT NULL,
-    `teacher_id`    BIGINT NOT NULL,
-    `guide_time`    DATETIME NOT NULL,
-    `content`       TEXT NOT NULL,
-    `student_work`  TEXT,
-    `next_plan`     TEXT,
-    `create_time`   DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    `id`              BIGINT NOT NULL AUTO_INCREMENT,
+    `selection_id`    BIGINT NOT NULL,
+    `student_id`      BIGINT NOT NULL,
+    `teacher_id`      BIGINT NOT NULL,
+    `guide_time`      DATETIME NOT NULL,
+    `content`         TEXT NOT NULL,
+    `student_work`    TEXT,
+    `next_plan`       TEXT,
+    `guidance_type`   VARCHAR(32) COMMENT '指导方式: ONLINE/OFFLINE/WECHAT',
+    `attachment_url`  VARCHAR(255) COMMENT '附件URL',
+    `create_time`     DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     PRIMARY KEY (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='指导日志';
 
@@ -210,6 +219,9 @@ CREATE TABLE IF NOT EXISTS `thesis_version` (
     `file_url`      VARCHAR(255) NOT NULL,
     `file_name`     VARCHAR(255),
     `file_size`     BIGINT,
+    `pdf_url`       VARCHAR(255) COMMENT '转换后的 PDF 预览地址（Word自动转换）',
+    `word_count`    INT COMMENT '正文字数',
+    `page_count`    SMALLINT COMMENT '页数',
     `comment`       TEXT,
     `status`        TINYINT NOT NULL DEFAULT 0 COMMENT '0待审阅 1已退回 2已通过',
     `create_time`   DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -293,8 +305,9 @@ CREATE TABLE IF NOT EXISTS `defense_record` (
     `present_score`   TINYINT,
     `qa_score`        TINYINT,
     `total_score`     TINYINT,
-    `result`          TINYINT COMMENT '1通过 2修改后通过 3不通过',
-    `questions`       TEXT,
+    `result`              TINYINT COMMENT '1通过 2修改后通过 3不通过',
+    `revision_confirmed`  TINYINT NOT NULL DEFAULT 0 COMMENT '修改后通过时管理员确认修改：0未确认 1已确认',
+    `questions`           TEXT,
     `comment`         TEXT,
     `secretary_note`  TEXT,
     `deleted`         TINYINT NOT NULL DEFAULT 0,
@@ -340,6 +353,80 @@ CREATE TABLE IF NOT EXISTS `notice` (
     PRIMARY KEY (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='通知公告';
 
+-- ===================== 站内通知表 =====================
+CREATE TABLE IF NOT EXISTS `notification` (
+    `id`            BIGINT NOT NULL AUTO_INCREMENT,
+    `user_id`       BIGINT NOT NULL COMMENT '接收者ID',
+    `type`          VARCHAR(64) NOT NULL COMMENT '通知类型',
+    `title`         VARCHAR(255) NOT NULL COMMENT '通知标题',
+    `content`       TEXT COMMENT '通知正文',
+    `related_id`    BIGINT COMMENT '关联业务主键',
+    `related_type`  VARCHAR(32) COMMENT '关联业务类型: TOPIC/SELECTION/PROPOSAL/MID_CHECK/THESIS',
+    `related_url`   VARCHAR(255) COMMENT '前端跳转路由',
+    `is_read`       TINYINT NOT NULL DEFAULT 0 COMMENT '0未读 1已读',
+    `create_time`   DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (`id`),
+    KEY `idx_user_unread`  (`user_id`, `is_read`),
+    KEY `idx_create_time`  (`create_time`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='站内通知';
+
+-- ===================== 操作日志表 =====================
+CREATE TABLE IF NOT EXISTS `operation_log` (
+    `id`           BIGINT NOT NULL AUTO_INCREMENT,
+    `user_id`      BIGINT COMMENT '操作人ID',
+    `user_name`    VARCHAR(64) COMMENT '操作人姓名（快照）',
+    `role`         TINYINT COMMENT '操作人角色',
+    `module`       VARCHAR(64) NOT NULL COMMENT '模块',
+    `action`       VARCHAR(64) NOT NULL COMMENT '动作: CREATE/UPDATE/DELETE/APPROVE/REJECT/SUBMIT/REVIEW',
+    `description`  VARCHAR(512) COMMENT '可读描述',
+    `target_id`    BIGINT COMMENT '目标对象ID',
+    `target_type`  VARCHAR(32) COMMENT '目标类型',
+    `ip`           VARCHAR(64) COMMENT '客户端IP',
+    `duration_ms`  INT COMMENT '接口耗时(ms)',
+    `status`       TINYINT NOT NULL DEFAULT 1 COMMENT '1成功 0失败',
+    `error_msg`    TEXT COMMENT '失败信息',
+    `create_time`  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (`id`),
+    KEY `idx_user_id`     (`user_id`),
+    KEY `idx_module`      (`module`),
+    KEY `idx_create_time` (`create_time`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='操作日志';
+
+-- ===================== 批量导入记录表 =====================
+CREATE TABLE IF NOT EXISTS `import_record` (
+    `id`            BIGINT NOT NULL AUTO_INCREMENT,
+    `type`          VARCHAR(32) NOT NULL COMMENT 'USER_STUDENT/USER_TEACHER/ORG_CLASS',
+    `year`          SMALLINT COMMENT '届次（导入学生时填写）',
+    `file_name`     VARCHAR(255) COMMENT '原始文件名',
+    `total_count`   INT NOT NULL DEFAULT 0,
+    `success_count` INT NOT NULL DEFAULT 0,
+    `fail_count`    INT NOT NULL DEFAULT 0,
+    `status`        TINYINT NOT NULL DEFAULT 0 COMMENT '0处理中 1完成 2部分失败',
+    `error_detail`  MEDIUMTEXT COMMENT '失败明细 JSON Array',
+    `operator_id`   BIGINT NOT NULL COMMENT '操作人ID',
+    `create_time`   DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    `finish_time`   DATETIME,
+    PRIMARY KEY (`id`),
+    KEY `idx_operator` (`operator_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='批量导入记录';
+
+-- ===================== 论文批注表 =====================
+CREATE TABLE IF NOT EXISTS `thesis_annotation` (
+    `id`           BIGINT NOT NULL AUTO_INCREMENT,
+    `thesis_id`    BIGINT NOT NULL COMMENT '论文版本ID(thesis_version.id)',
+    `author_id`    BIGINT NOT NULL COMMENT '批注者ID',
+    `author_name`  VARCHAR(32) COMMENT '批注者姓名快照',
+    `page_no`      INT NOT NULL DEFAULT 1 COMMENT 'PDF页码',
+    `content`      TEXT NOT NULL COMMENT '批注内容',
+    `color`        VARCHAR(16) NOT NULL DEFAULT '#FFEB3B' COMMENT '高亮颜色',
+    `resolved`     TINYINT NOT NULL DEFAULT 0 COMMENT '0未解决 1已解决',
+    `deleted`      TINYINT NOT NULL DEFAULT 0,
+    `create_time`  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    `update_time`  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    PRIMARY KEY (`id`),
+    KEY `idx_thesis_id` (`thesis_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='论文批注';
+
 
 -- =====================================================================
 -- 初始数据
@@ -360,34 +447,33 @@ INSERT INTO `major` (`id`, `name`, `code`, `college_id`) VALUES
 
 -- 班级
 INSERT INTO `class_group` (`id`, `name`, `major_id`, `college_id`, `enroll_year`) VALUES
-(1, '计科2022-1班', 1, 1, 2022),
-(2, '计科2022-2班', 1, 1, 2022),
+(1, '计科2022-1班',     1, 1, 2022),
+(2, '计科2022-2班',     1, 1, 2022),
 (3, '人工智能2022-1班', 2, 1, 2022),
-(4, '软工2022-1班', 3, 2, 2022);
+(4, '软工2022-1班',     3, 2, 2022);
 
--- 用户（角色: 1学生 2指导教师 3评阅教师 4答辩委员 5专业管理员 6学院管理员 7教务管理员）
-INSERT INTO `user` (`username`, `password`, `real_name`, `role`, `college_id`, `major_id`, `class_id`, `email`, `status`) VALUES
+-- 用户（初始密码均为: password123）
+INSERT INTO `user` (`username`, `password`, `real_name`, `role`, `college_id`, `major_id`, `class_id`, `email`, `title`, `status`) VALUES
 -- 教务管理员
-('admin',      '$2a$10$Upz6Lpch4vuWqO/oGRwNDuAOAvoZQqFeI7G4jTNihlL8oL/BC8po6', '教务管理员',    7, NULL, NULL, NULL, 'admin@uni.edu.cn', 1),
+('admin',       '$2a$10$Upz6Lpch4vuWqO/oGRwNDuAOAvoZQqFeI7G4jTNihlL8oL/BC8po6', '教务管理员',      7, NULL, NULL, NULL, 'admin@uni.edu.cn',     NULL, 1),
 -- 学院管理员
-('college001', '$2a$10$Upz6Lpch4vuWqO/oGRwNDuAOAvoZQqFeI7G4jTNihlL8oL/BC8po6', '计算机学院管理员', 6, 1, NULL, NULL, 'cs-admin@uni.edu.cn', 1),
-('college002', '$2a$10$Upz6Lpch4vuWqO/oGRwNDuAOAvoZQqFeI7G4jTNihlL8oL/BC8po6', '软件学院管理员',   6, 2, NULL, NULL, 'se-admin@uni.edu.cn', 1),
+('college001',  '$2a$10$Upz6Lpch4vuWqO/oGRwNDuAOAvoZQqFeI7G4jTNihlL8oL/BC8po6', '计算机学院管理员', 6, 1,    NULL, NULL, 'cs-admin@uni.edu.cn',  NULL, 1),
+('college002',  '$2a$10$Upz6Lpch4vuWqO/oGRwNDuAOAvoZQqFeI7G4jTNihlL8oL/BC8po6', '软件学院管理员',   6, 2,    NULL, NULL, 'se-admin@uni.edu.cn',  NULL, 1),
 -- 专业管理员
-('major001',   '$2a$10$Upz6Lpch4vuWqO/oGRwNDuAOAvoZQqFeI7G4jTNihlL8oL/BC8po6', '计科专业负责人', 5, 1, 1, NULL, 'cst-admin@uni.edu.cn', 1),
-('major002',   '$2a$10$Upz6Lpch4vuWqO/oGRwNDuAOAvoZQqFeI7G4jTNihlL8oL/BC8po6', 'AI专业负责人',  5, 1, 2, NULL, 'ai-admin@uni.edu.cn', 1),
+('major001',    '$2a$10$Upz6Lpch4vuWqO/oGRwNDuAOAvoZQqFeI7G4jTNihlL8oL/BC8po6', '计科专业负责人',   5, 1,    1,    NULL, 'cst-admin@uni.edu.cn', NULL, 1),
+('major002',    '$2a$10$Upz6Lpch4vuWqO/oGRwNDuAOAvoZQqFeI7G4jTNihlL8oL/BC8po6', 'AI专业负责人',     5, 1,    2,    NULL, 'ai-admin@uni.edu.cn',  NULL, 1),
 -- 指导教师
-('teacher001', '$2a$10$Upz6Lpch4vuWqO/oGRwNDuAOAvoZQqFeI7G4jTNihlL8oL/BC8po6', '张教授',   2, 1, 1, NULL, 'zhang@uni.edu.cn', 1),
-('teacher002', '$2a$10$Upz6Lpch4vuWqO/oGRwNDuAOAvoZQqFeI7G4jTNihlL8oL/BC8po6', '李副教授', 2, 1, 2, NULL, 'li@uni.edu.cn', 1),
+('teacher001',  '$2a$10$Upz6Lpch4vuWqO/oGRwNDuAOAvoZQqFeI7G4jTNihlL8oL/BC8po6', '张教授',           2, 1,    1,    NULL, 'zhang@uni.edu.cn',     '教授',   1),
+('teacher002',  '$2a$10$Upz6Lpch4vuWqO/oGRwNDuAOAvoZQqFeI7G4jTNihlL8oL/BC8po6', '李副教授',         2, 1,    2,    NULL, 'li@uni.edu.cn',        '副教授', 1),
 -- 评阅教师
-('reviewer001','$2a$10$Upz6Lpch4vuWqO/oGRwNDuAOAvoZQqFeI7G4jTNihlL8oL/BC8po6', '王教授',   3, 1, NULL, NULL, 'wang@uni.edu.cn', 1),
+('reviewer001', '$2a$10$Upz6Lpch4vuWqO/oGRwNDuAOAvoZQqFeI7G4jTNihlL8oL/BC8po6', '王教授',           3, 1,    NULL, NULL, 'wang@uni.edu.cn',      '教授',   1),
 -- 答辩委员
-('defense001', '$2a$10$Upz6Lpch4vuWqO/oGRwNDuAOAvoZQqFeI7G4jTNihlL8oL/BC8po6', '赵教授',   4, 1, NULL, NULL, 'zhao@uni.edu.cn', 1),
+('defense001',  '$2a$10$Upz6Lpch4vuWqO/oGRwNDuAOAvoZQqFeI7G4jTNihlL8oL/BC8po6', '赵教授',           4, 1,    NULL, NULL, 'zhao@uni.edu.cn',      '教授',   1),
 -- 学生
-('student001', '$2a$10$Upz6Lpch4vuWqO/oGRwNDuAOAvoZQqFeI7G4jTNihlL8oL/BC8po6', '王小明', 1, 1, 1, 1, 'wangxm@student.edu.cn', 1),
-('student002', '$2a$10$Upz6Lpch4vuWqO/oGRwNDuAOAvoZQqFeI7G4jTNihlL8oL/BC8po6', '李小红', 1, 1, 1, 1, 'lixh@student.edu.cn', 1),
-('student003', '$2a$10$Upz6Lpch4vuWqO/oGRwNDuAOAvoZQqFeI7G4jTNihlL8oL/BC8po6', '陈小军', 1, 1, 2, 3, 'chenxj@student.edu.cn', 1),
-('student004', '$2a$10$Upz6Lpch4vuWqO/oGRwNDuAOAvoZQqFeI7G4jTNihlL8oL/BC8po6', '刘小芳', 1, 2, 3, 4, 'liuxf@student.edu.cn', 1);
--- 初始密码均为: password123
+('student001',  '$2a$10$Upz6Lpch4vuWqO/oGRwNDuAOAvoZQqFeI7G4jTNihlL8oL/BC8po6', '王小明', 1, 1, 1, 1, 'wangxm@student.edu.cn', NULL, 1),
+('student002',  '$2a$10$Upz6Lpch4vuWqO/oGRwNDuAOAvoZQqFeI7G4jTNihlL8oL/BC8po6', '李小红', 1, 1, 1, 1, 'lixh@student.edu.cn',   NULL, 1),
+('student003',  '$2a$10$Upz6Lpch4vuWqO/oGRwNDuAOAvoZQqFeI7G4jTNihlL8oL/BC8po6', '陈小军', 1, 1, 2, 3, 'chenxj@student.edu.cn', NULL, 1),
+('student004',  '$2a$10$Upz6Lpch4vuWqO/oGRwNDuAOAvoZQqFeI7G4jTNihlL8oL/BC8po6', '刘小芳', 1, 2, 3, 4, 'liuxf@student.edu.cn',  NULL, 1);
 
 -- 全局工作流配置（college_id=0, major_id=0 表示全局默认）
 INSERT INTO `workflow_config` (`stage`, `stage_name`, `start_time`, `end_time`, `year`, `college_id`, `major_id`) VALUES

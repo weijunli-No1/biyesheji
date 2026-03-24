@@ -10,21 +10,29 @@ import java.util.List;
 
 public interface ScoreMapper extends BaseMapper<Score> {
 
-    @Select("SELECT s.*, u_s.real_name AS student_name, u_s.username AS student_no, " +
-            "u_s.college_id, u_s.major_id, t.title AS topic_title, u_t.real_name AS teacher_name " +
-            "FROM score s " +
-            "LEFT JOIN user u_s ON s.student_id = u_s.id " +
-            "LEFT JOIN user u_t ON s.teacher_id = u_t.id " +
-            "LEFT JOIN topic_selection ts ON s.selection_id = ts.id " +
+    @Select("SELECT ts.id AS selection_id, ts.teacher_id, " +
+            "u_s.real_name AS student_name, u_s.username AS student_no, " +
+            "u_s.college_id, u_s.major_id, t.title AS topic_title, u_t.real_name AS teacher_name, " +
+            "s.id, s.student_id, s.proposal_score, s.teacher_score, s.review_score, s.defense_score, " +
+            "s.total_score, s.grade, s.is_locked, s.is_excellent, s.teacher_comment " +
+            "FROM topic_selection ts " +
+            "LEFT JOIN score s ON ts.id = s.selection_id " +
+            "LEFT JOIN user u_s ON ts.student_id = u_s.id " +
+            "LEFT JOIN user u_t ON ts.teacher_id = u_t.id " +
             "LEFT JOIN topic t ON ts.topic_id = t.id " +
-            "WHERE (#{collegeId} IS NULL OR u_s.college_id = #{collegeId}) " +
+            "WHERE ts.status = 1 " +
+            "AND (#{collegeId} IS NULL OR u_s.college_id = #{collegeId}) " +
             "AND (#{majorId} IS NULL OR u_s.major_id = #{majorId}) " +
-            "AND (#{teacherId} IS NULL OR s.teacher_id = #{teacherId}) " +
-            "ORDER BY s.total_score DESC")
+            "AND (#{teacherId} IS NULL OR ts.teacher_id = #{teacherId}) " +
+            "AND (#{keyword} IS NULL OR #{keyword} = '' " +
+            "  OR u_s.real_name LIKE CONCAT('%',#{keyword},'%') " +
+            "  OR u_s.username LIKE CONCAT('%',#{keyword},'%')) " +
+            "ORDER BY ts.id")
     Page<ScoreVO> selectScoreList(Page<ScoreVO> page,
                                   @Param("collegeId") Long collegeId,
                                   @Param("majorId") Long majorId,
-                                  @Param("teacherId") Long teacherId);
+                                  @Param("teacherId") Long teacherId,
+                                  @Param("keyword") String keyword);
 
     @Select("SELECT COUNT(*) AS total, " +
             "SUM(CASE WHEN grade='优秀' THEN 1 ELSE 0 END) AS excellent, " +

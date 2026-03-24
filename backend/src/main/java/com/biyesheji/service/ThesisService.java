@@ -6,9 +6,11 @@ import com.biyesheji.dto.ThesisVO;
 import com.biyesheji.entity.Proposal;
 import com.biyesheji.entity.ThesisVersion;
 import com.biyesheji.entity.TopicSelection;
+import com.biyesheji.entity.User;
 import com.biyesheji.mapper.ProposalMapper;
 import com.biyesheji.mapper.ThesisVersionMapper;
 import com.biyesheji.mapper.TopicSelectionMapper;
+import com.biyesheji.mapper.UserMapper;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import java.util.List;
@@ -20,6 +22,8 @@ public class ThesisService {
     private final ThesisVersionMapper thesisVersionMapper;
     private final TopicSelectionMapper selectionMapper;
     private final ProposalMapper proposalMapper;
+    private final UserMapper userMapper;
+    private final NotificationService notificationService;
 
     /**
      * 学生上传论文版本
@@ -63,6 +67,10 @@ public class ThesisService {
         thesis.setVersion((int) count + 1);
 
         thesisVersionMapper.insert(thesis);
+
+        User student = userMapper.selectById(studentId);
+        String studentName = student != null ? student.getRealName() : "学生";
+        notificationService.thesisSubmitted(selection.getTeacherId(), thesis.getId(), studentName, thesis.getVersion());
         return Result.ok(thesis);
     }
 
@@ -83,6 +91,12 @@ public class ThesisService {
         thesis.setComment(comment);
         thesis.setStatus(pass ? 2 : 1); // 2=已通过，1=已退回
         thesisVersionMapper.updateById(thesis);
+
+        if (pass) {
+            notificationService.thesisPassed(thesis.getStudentId(), thesisId, thesis.getVersion());
+        } else {
+            notificationService.thesisRejected(thesis.getStudentId(), thesisId, thesis.getVersion(), comment);
+        }
         return Result.ok();
     }
 

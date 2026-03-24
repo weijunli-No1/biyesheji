@@ -6,9 +6,14 @@
         <div class="page-card">
           <div class="toolbar">
             <b class="section-title">答辩小组</b>
-            <el-button v-if="auth.isManager" size="small" type="primary" @click="openGroupDialog">
-              新建小组
-            </el-button>
+            <div style="display:flex;align-items:center;gap:8px">
+              <el-select v-model="selectedYear" size="small" style="width:100px" @change="() => { activeGroup.value = null; students.value = []; loadGroups() }">
+                <el-option v-for="y in yearOptions" :key="y" :label="y + '届'" :value="y" />
+              </el-select>
+              <el-button v-if="auth.isManager" size="small" type="primary" @click="openGroupDialog">
+                新建小组
+              </el-button>
+            </div>
           </div>
           <el-table :data="groups" size="small" stripe v-loading="groupLoading"
             :row-class-name="({ row }) => row.id === activeGroup?.id ? 'active-row' : ''">
@@ -21,7 +26,7 @@
             </el-table-column>
             <el-table-column label="" width="50">
               <template #default="{ row }">
-                <el-button link type="primary" size="small" @click="selectGroup(row)">选</el-button>
+                <el-button link type="primary" size="small" @click="selectGroup(row)">查看</el-button>
               </template>
             </el-table-column>
           </el-table>
@@ -62,9 +67,16 @@
                   {{ row.totalScore ?? '—' }}
                 </template>
               </el-table-column>
-              <el-table-column label="操作" width="80" v-if="canEnterScore">
+              <el-table-column label="操作" width="140">
                 <template #default="{ row }">
-                  <el-button link type="primary" @click="recordDefense(row)">录入</el-button>
+                  <el-button v-if="canEnterScore" link type="primary" @click="recordDefense(row)">录入</el-button>
+                  <!-- 修改后通过且未确认修改：管理员可确认 -->
+                  <el-button
+                    v-if="auth.isManager && row.result === 2 && row.revisionConfirmed !== 1"
+                    link type="warning" @click="doConfirmRevision(row)">确认修改</el-button>
+                  <el-tag
+                    v-if="row.result === 2 && row.revisionConfirmed === 1"
+                    type="success" size="small" effect="light">修改已确认</el-tag>
                 </template>
               </el-table-column>
 
@@ -185,6 +197,9 @@ import { defenseResultLabels, defenseResultColors } from '@/utils/statusConfig'
 const auth = useAuthStore()
 const canEnterScore = computed(() => auth.role === 4 || auth.isManager)
 const dialogWidth = computed(() => window.innerWidth <= 640 ? '92%' : '560px')
+const curYear = new Date().getFullYear()
+const selectedYear = ref(curYear)
+const yearOptions = [curYear - 1, curYear, curYear + 1]
 
 // ---- 小组数据 ----
 const groups = ref([])
@@ -194,8 +209,12 @@ const activeGroup = ref(null)
 async function loadGroups() {
   groupLoading.value = true
   try {
-    const res = await defenseApi.listGroups(2026)
-    groups.value = res.data
+    const res = await defenseApi.listGroups(selectedYear.value)
+    groups.value = res.data || []
+    // 自动选中第一个小组，避免右侧面板空白
+    if (groups.value.length > 0 && !activeGroup.value) {
+      selectGroup(groups.value[0])
+    }
   } finally {
     groupLoading.value = false
   }
@@ -260,7 +279,7 @@ async function openAssignDialog() {
   assignDialogVisible.value = true
   unassignedLoading.value = true
   try {
-    const res = await defenseApi.unassignedStudents(2026)
+    const res = await defenseApi.unassignedStudents(selectedYear.value)
     unassigned.value = res.data
   } finally {
     unassignedLoading.value = false
@@ -319,6 +338,17 @@ async function saveDefenseScore() {
   } finally {
     saving.value = false
   }
+}
+
+// ---- 确认修改 ----
+async function doConfirmRevision(row) {
+  await ElMessageBox.confirm(
+    `确认「${row.studentName}」已完成论文修改？确认后该生成绩可被锁定。`,
+    '确认修改完成', { type: 'warning', confirmButtonText: '确认' }
+  )
+  await defenseApi.confirmRevision(row.recordId)
+  ElMessage.success('已确认修改完成，成绩现可锁定')
+  loadStudents(activeGroup.value.id)
 }
 
 // ---- 导出 ----

@@ -20,10 +20,11 @@ public class ScoreController {
     private final ScoreService scoreService;
 
     /**
-     * 导师录入导师评分（只能录入自己指导学生的分，且只能录导师评分项）
+     * 导师录入导师评分（只能录入自己指导学生的分）
+     * 管理员也可代为录入（如导师未操作）
      */
     @PostMapping("/{selectionId}/teacher")
-    @PreAuthorize("hasRole('TEACHER')")
+    @PreAuthorize("hasAnyRole('TEACHER','MAJOR_ADMIN','COLLEGE_ADMIN','ADMIN')")
     @Operation(summary = "导师评分录入")
     public Result<?> saveTeacherScore(@PathVariable Long selectionId,
                                       @RequestBody Map<String, Object> body,
@@ -31,7 +32,10 @@ public class ScoreController {
         Integer score = (Integer) body.get("teacherScore");
         String comment = (String) body.get("teacherComment");
         if (score == null || score < 0 || score > 100) return Result.fail(400, "评分须在0-100之间");
-        return scoreService.saveTeacherScore(selectionId, user.getUser().getId(), score, comment);
+        int role = user.getUser().getRole();
+        // 管理员跳过导师归属校验
+        Long teacherId = (role >= 5) ? null : user.getUser().getId();
+        return scoreService.saveTeacherScore(selectionId, teacherId, score, comment);
     }
 
     /**
@@ -84,18 +88,19 @@ public class ScoreController {
     }
 
     @GetMapping
-    @PreAuthorize("hasAnyRole('TEACHER','MAJOR_ADMIN','COLLEGE_ADMIN','ADMIN')")
+    @PreAuthorize("hasAnyRole('TEACHER','REVIEWER','MAJOR_ADMIN','COLLEGE_ADMIN','ADMIN')")
     @Operation(summary = "成绩列表")
     public Result<?> list(@RequestParam(defaultValue = "1") int page,
                           @RequestParam(defaultValue = "10") int size,
+                          @RequestParam(required = false) String keyword,
                           @AuthenticationPrincipal UserDetailsImpl user) {
         int role = user.getUser().getRole();
-        // 教师只查自己指导的学生
-        Long tid      = (role == 2) ? user.getUser().getId() : null;
+        // 指导教师只查自己指导的学生
+        Long tid       = (role == 2) ? user.getUser().getId() : null;
         // 管理员按作用域过滤
         Long collegeId = (role == 6) ? user.getUser().getCollegeId() : null;
         Long majorId   = (role == 5) ? user.getUser().getMajorId()   : null;
-        return scoreService.listScores(page, size, collegeId, majorId, tid);
+        return scoreService.listScores(page, size, collegeId, majorId, tid, keyword);
     }
 
     @GetMapping("/stats")

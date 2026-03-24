@@ -59,7 +59,8 @@ public class SecurityConfig {
             .csrf(csrf -> csrf.disable())
             .sessionManagement(s -> s.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
             .authorizeHttpRequests(auth -> auth
-                .requestMatchers("/auth/**", "/v3/api-docs/**", "/swagger-ui/**", "/doc.html/**", "/webjars/**").permitAll()
+                .requestMatchers("/auth/**", "/files/view/**", "/v3/api-docs/**", "/swagger-ui/**", "/doc.html/**", "/webjars/**").permitAll()
+                .requestMatchers("/notifications/sse").authenticated()
                 .anyRequest().authenticated()
             )
             .exceptionHandling(ex -> ex

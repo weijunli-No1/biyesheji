@@ -20,6 +20,10 @@ public class User {
     private String email;
     private String phone;
     private String avatar;
+    /** 职称（教师专用：讲师/副教授/教授等） */
+    private String title;
+    /** 院系名称快照（冗余，避免频繁 join） */
+    private String department;
     private Integer status;
     @TableLogic
     private Integer deleted;

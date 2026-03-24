@@ -8,8 +8,10 @@ import com.biyesheji.dto.SelectionVO;
 import com.biyesheji.dto.TopicVO;
 import com.biyesheji.entity.Topic;
 import com.biyesheji.entity.TopicSelection;
+import com.biyesheji.entity.User;
 import com.biyesheji.mapper.TopicMapper;
 import com.biyesheji.mapper.TopicSelectionMapper;
+import com.biyesheji.mapper.UserMapper;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -22,6 +24,8 @@ public class TopicService {
 
     private final TopicMapper topicMapper;
     private final TopicSelectionMapper selectionMapper;
+    private final UserMapper userMapper;
+    private final NotificationService notificationService;
 
     /** 教师申报新课题 */
     public Result<Topic> applyTopic(Topic topic, Long teacherId) {
@@ -108,42 +112,88 @@ public class TopicService {
         topic.setStatus(approve ? 1 : 3);
         if (!approve) topic.setRejectReason(rejectReason);
         topicMapper.updateById(topic);
+
+        if (approve) {
+            notificationService.topicApproved(topic.getTeacherId(), topicId, topic.getTitle());
+        } else {
+            notificationService.topicRejected(topic.getTeacherId(), topicId, topic.getTitle(), rejectReason);
+        }
         return Result.ok();
     }
 
     /**
      * 学生选题
-     * 前置条件：课题已发布(status=1)、名额未满、本届未选题
+     * P4 架构调整：每学生每届只保留一条选题记录，被拒/解除后重新选题复用旧记录而非新增，
+     * 避免历史脏数据堆积并确保数据一致性。
      */
     @Transactional
     public Result<?> selectTopic(Long studentId, Long topicId, Integer year) {
-        // 检查是否已选题（含待确认/已确认）
-        var existing = selectionMapper.selectOne(new LambdaQueryWrapper<TopicSelection>()
+        // 查询该学生本届任意状态的选题记录（统一用一条记录管理整个生命周期）
+        TopicSelection anyRecord = selectionMapper.selectOne(new LambdaQueryWrapper<TopicSelection>()
                 .eq(TopicSelection::getStudentId, studentId)
                 .eq(TopicSelection::getYear, year)
-                .in(TopicSelection::getStatus, List.of(0, 1))); // 待确认或已确认
-        if (existing != null) return Result.fail(400, "您本届已有选题申请，请等待导师确认");
+                .last("LIMIT 1"));
+
+        if (anyRecord != null && (anyRecord.getStatus() == 0 || anyRecord.getStatus() == 1)) {
+            return Result.fail(400, "您本届已有选题申请，请等待导师确认");
+        }
 
         Topic topic = topicMapper.selectById(topicId);
         if (topic == null) return Result.fail(400, "课题不存在");
         if (topic.getStatus() != 1) return Result.fail(400, "该课题不在可选状态");
 
-        // 名额检查：只计算"已确认(1)"的选题，待确认不占名额
+        // 名额检查：只计算"已确认(1)"的选题
         long confirmed = selectionMapper.selectCount(new LambdaQueryWrapper<TopicSelection>()
                 .eq(TopicSelection::getTopicId, topicId)
                 .eq(TopicSelection::getStatus, 1));
         if (confirmed >= topic.getMaxStudents()) return Result.fail(400, "该课题名额已满");
 
-        TopicSelection selection = new TopicSelection();
-        selection.setStudentId(studentId);
-        selection.setTopicId(topicId);
-        selection.setTeacherId(topic.getTeacherId());
-        selection.setCollegeId(topic.getCollegeId());
-        selection.setMajorId(topic.getMajorId());
-        selection.setYear(year);
-        selection.setStatus(0); // 待导师确认
-        selection.setApplyTime(LocalDateTime.now());
-        selectionMapper.insert(selection);
+        Long selectionId;
+        if (anyRecord != null) {
+            // 已拒绝(2)或已解除(3) → 复用记录，重置为待确认
+            anyRecord.setTopicId(topicId);
+            anyRecord.setTeacherId(topic.getTeacherId());
+            anyRecord.setCollegeId(topic.getCollegeId());
+            anyRecord.setMajorId(topic.getMajorId());
+            anyRecord.setStatus(0);
+            anyRecord.setApplyTime(LocalDateTime.now());
+            anyRecord.setConfirmTime(null);
+            selectionMapper.updateById(anyRecord);
+            selectionId = anyRecord.getId();
+        } else {
+            TopicSelection selection = new TopicSelection();
+            selection.setStudentId(studentId);
+            selection.setTopicId(topicId);
+            selection.setTeacherId(topic.getTeacherId());
+            selection.setCollegeId(topic.getCollegeId());
+            selection.setMajorId(topic.getMajorId());
+            selection.setYear(year);
+            selection.setStatus(0);
+            selection.setApplyTime(LocalDateTime.now());
+            selectionMapper.insert(selection);
+            selectionId = selection.getId();
+        }
+
+        User student = userMapper.selectById(studentId);
+        String studentName = student != null ? student.getRealName() : "学生";
+        notificationService.selectionApplied(topic.getTeacherId(), selectionId, studentName, topic.getTitle());
+        return Result.ok();
+    }
+
+    /**
+     * P3: 管理员关闭课题（已发布 → 已关闭）
+     * 适用场景：名额已满手动关闭、或停办该课题。
+     */
+    public Result<?> closeTopic(Long topicId, int adminRole, Long adminCollegeId, Long adminMajorId) {
+        Topic topic = topicMapper.selectById(topicId);
+        if (topic == null) return Result.fail("课题不存在");
+        if (topic.getStatus() != 1) return Result.fail(400, "只有已发布的课题可以关闭");
+        if (adminRole == 6 && adminCollegeId != null && !adminCollegeId.equals(topic.getCollegeId()))
+            return Result.fail(403, "只能关闭本学院的课题");
+        if (adminRole == 5 && adminMajorId != null && !adminMajorId.equals(topic.getMajorId()))
+            return Result.fail(403, "只能关闭本专业的课题");
+        topic.setStatus(2);
+        topicMapper.updateById(topic);
         return Result.ok();
     }
 
@@ -169,6 +219,14 @@ public class TopicService {
         selection.setStatus(confirm ? 1 : 2);
         selection.setConfirmTime(LocalDateTime.now());
         selectionMapper.updateById(selection);
+
+        Topic topic = topicMapper.selectById(selection.getTopicId());
+        String topicTitle = topic != null ? topic.getTitle() : "课题";
+        if (confirm) {
+            notificationService.selectionConfirmed(selection.getStudentId(), selectionId, topicTitle);
+        } else {
+            notificationService.selectionRejected(selection.getStudentId(), selectionId, topicTitle);
+        }
         return Result.ok();
     }
 
@@ -184,9 +242,9 @@ public class TopicService {
 
     /** 分页查询课题列表 */
     public Result<PageResult<TopicVO>> listTopics(int page, int size, Integer year, String keyword,
-                                                  Integer status, Long teacherId,
+                                                  Integer type, Integer status, Long teacherId,
                                                   Long collegeId, Long majorId) {
-        Page<TopicVO> p = topicMapper.selectTopicList(new Page<>(page, size), year, keyword, status, teacherId, collegeId, majorId);
+        Page<TopicVO> p = topicMapper.selectTopicList(new Page<>(page, size), year, keyword, type, status, teacherId, collegeId, majorId);
         return Result.ok(PageResult.of(p));
     }
 
@@ -206,8 +264,8 @@ public class TopicService {
         return Result.ok(topicMapper.selectMyTopics(teacherId));
     }
 
-    public Result<Topic> getTopic(Long topicId) {
-        Topic topic = topicMapper.selectById(topicId);
+    public Result<TopicVO> getTopic(Long topicId) {
+        TopicVO topic = topicMapper.selectTopicVOById(topicId);
         if (topic == null) return Result.fail("课题不存在");
         return Result.ok(topic);
     }

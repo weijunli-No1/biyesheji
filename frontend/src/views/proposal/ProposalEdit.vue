@@ -20,10 +20,10 @@
       <!-- 状态说明 -->
       <el-alert v-if="proposal?.status === 1" type="info" show-icon :closable="false" style="margin-bottom:16px"
         title="开题报告正在等待导师审核，审核期间不可修改" />
-      <el-alert v-if="proposal?.status === 2" type="info" show-icon :closable="false" style="margin-bottom:16px"
-        title="开题报告已通过导师审核，正在进行部门评审" />
+      <el-alert v-if="proposal?.status === 2" type="success" show-icon :closable="false" style="margin-bottom:16px"
+        title="开题报告已通过导师审核，等待院系评审" />
       <el-alert v-if="proposal?.status === 3" type="success" show-icon :closable="false" style="margin-bottom:16px"
-        title="开题报告已通过评审，请继续推进论文工作" />
+        title="开题报告已通过院系评审，请继续推进论文工作" />
       <el-alert v-if="proposal?.status === 4" :title="'退回原因：' + (proposal.rejectReason || '请联系导师了解详情')"
         type="error" show-icon :closable="false" style="margin-bottom:16px" />
       <el-alert v-if="proposal?.teacherComment && proposal?.status === 4"
@@ -62,7 +62,8 @@
         <el-divider>附件上传</el-divider>
         <el-form-item label="开题报告文件">
           <el-upload action="/api/files/upload" :headers="uploadHeaders"
-            :on-success="(res) => onFileSuccess('fileUrl', res)"
+            :on-success="(res, file) => onFileSuccess('fileUrl', res, file)"
+            :on-error="() => ElMessage.error('文件上传失败，请重试')"
             :file-list="fileList" accept=".pdf,.doc,.docx" :limit="1"
             :disabled="isFormDisabled">
             <el-button :disabled="isFormDisabled">上传文件</el-button>
@@ -71,7 +72,8 @@
         </el-form-item>
         <el-form-item label="外文翻译文件">
           <el-upload action="/api/files/upload" :headers="uploadHeaders"
-            :on-success="(res) => onFileSuccess('translationUrl', res)"
+            :on-success="(res, file) => onFileSuccess('translationUrl', res, file)"
+            :on-error="() => ElMessage.error('文件上传失败，请重试')"
             :file-list="translationFileList" accept=".pdf,.doc,.docx" :limit="1"
             :disabled="isFormDisabled">
             <el-button :disabled="isFormDisabled">上传文件</el-button>
@@ -141,12 +143,16 @@ const rules = {
   method:      [{ required: true, message: '请填写研究内容与方法' }],
 }
 
-const statusLabels = { 0: '草稿', 1: '待导师审核', 2: '待评审', 3: '已通过', 4: '已退回' }
-const statusColors  = { 0: 'info', 1: 'warning', 2: 'warning', 3: 'success', 4: 'danger' }
+const statusLabels = { 0: '草稿', 1: '待导师审核', 2: '导师已通过', 3: '评审已通过', 4: '已退回' }
+const statusColors  = { 0: 'info', 1: 'warning', 2: '', 3: 'success', 4: 'danger' }
 
-function onFileSuccess(field, res) {
+function onFileSuccess(field, res, file) {
   if (res.code === 200) {
     form.value[field] = res.data.url
+    // 更新对应文件列表，让 el-upload 展示已上传的文件名和链接
+    const fileObj = { name: file.name, url: res.data.url }
+    if (field === 'fileUrl') fileList.value = [fileObj]
+    else translationFileList.value = [fileObj]
     ElMessage.success('文件上传成功')
   } else {
     ElMessage.error(res.message || '文件上传失败，请重试')
@@ -191,6 +197,15 @@ async function load() {
   if (res.data) {
     proposal.value = res.data
     Object.assign(form.value, res.data)
+    // 回显已上传文件到 el-upload 文件列表
+    if (res.data.fileUrl) {
+      const name = res.data.fileUrl.split('/').pop() || '开题报告文件'
+      fileList.value = [{ name, url: res.data.fileUrl }]
+    }
+    if (res.data.translationUrl) {
+      const name = res.data.translationUrl.split('/').pop() || '外文翻译文件'
+      translationFileList.value = [{ name, url: res.data.translationUrl }]
+    }
   }
 }
 

@@ -8,6 +8,7 @@ import lombok.EqualsAndHashCode;
 @EqualsAndHashCode(callSuper = true)
 public class TopicVO extends Topic {
     private String teacherName;
+    private String collegeName;
     private Integer selectedCount;
     /** 当前用户是否已申请 */
     private Boolean applied;

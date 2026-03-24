@@ -4,9 +4,13 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.biyesheji.common.Result;
 import com.biyesheji.dto.MidCheckVO;
 import com.biyesheji.entity.MidCheck;
+import com.biyesheji.entity.Proposal;
 import com.biyesheji.entity.TopicSelection;
+import com.biyesheji.entity.User;
 import com.biyesheji.mapper.MidCheckMapper;
+import com.biyesheji.mapper.ProposalMapper;
 import com.biyesheji.mapper.TopicSelectionMapper;
+import com.biyesheji.mapper.UserMapper;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
@@ -19,6 +23,9 @@ public class MidCheckService {
 
     private final MidCheckMapper midCheckMapper;
     private final TopicSelectionMapper selectionMapper;
+    private final ProposalMapper proposalMapper;
+    private final UserMapper userMapper;
+    private final NotificationService notificationService;
 
     /**
      * 学生保存草稿或提交中期检查
@@ -29,6 +36,15 @@ public class MidCheckService {
         TopicSelection selection = selectionMapper.selectById(midCheck.getSelectionId());
         if (selection == null || !selection.getStudentId().equals(studentId)) {
             return Result.fail(403, "无权操作此选题");
+        }
+
+        // P1: 提交时强制校验开题报告已通过（后端守卫，前端已有 UX 提示但不可绕过）
+        if (submit) {
+            Proposal proposal = proposalMapper.selectOne(new LambdaQueryWrapper<Proposal>()
+                    .eq(Proposal::getSelectionId, midCheck.getSelectionId()));
+            if (proposal == null || proposal.getStatus() != 3) {
+                return Result.fail(400, "开题报告尚未通过评审，无法提交中期检查");
+            }
         }
 
         MidCheck existing = midCheckMapper.selectOne(new LambdaQueryWrapper<MidCheck>()
@@ -48,13 +64,20 @@ public class MidCheckService {
             midCheck.setStatus(1); // 待导师审核
             midCheck.setSubmitTime(LocalDateTime.now());
         } else {
-            midCheck.setStatus(existing == null ? 0 : (existing.getStatus() == 3 ? 3 : 0));
+            // P6: 保存草稿始终置为草稿(0)，不保留"已退回"状态，使学生明确感知"编辑中"
+            midCheck.setStatus(0);
         }
 
         if (midCheck.getId() == null) {
             midCheckMapper.insert(midCheck);
         } else {
             midCheckMapper.updateById(midCheck);
+        }
+
+        if (submit) {
+            User student = userMapper.selectById(studentId);
+            String studentName = student != null ? student.getRealName() : "学生";
+            notificationService.midCheckSubmitted(midCheck.getTeacherId(), midCheck.getId(), studentName);
         }
         return Result.ok(midCheck);
     }
@@ -76,6 +99,12 @@ public class MidCheckService {
         if (pass && progress != null) check.setProgress(progress);
         check.setTeacherComment(comment);
         midCheckMapper.updateById(check);
+
+        if (pass) {
+            notificationService.midCheckPassed(check.getStudentId(), id);
+        } else {
+            notificationService.midCheckRejected(check.getStudentId(), id, comment);
+        }
         return Result.ok();
     }
 

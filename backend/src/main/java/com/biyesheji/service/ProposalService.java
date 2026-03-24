@@ -7,8 +7,10 @@ import com.biyesheji.common.Result;
 import com.biyesheji.dto.ProposalVO;
 import com.biyesheji.entity.Proposal;
 import com.biyesheji.entity.TopicSelection;
+import com.biyesheji.entity.User;
 import com.biyesheji.mapper.ProposalMapper;
 import com.biyesheji.mapper.TopicSelectionMapper;
+import com.biyesheji.mapper.UserMapper;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import java.time.LocalDateTime;
@@ -19,6 +21,9 @@ public class ProposalService {
 
     private final ProposalMapper proposalMapper;
     private final TopicSelectionMapper selectionMapper;
+    private final UserMapper userMapper;
+    private final NotificationService notificationService;
+    private final ScoreService scoreService;
 
     /**
      * 学生保存/提交开题报告
@@ -57,13 +62,20 @@ public class ProposalService {
             proposal.setStatus(1); // 待导师审核
             proposal.setSubmitTime(LocalDateTime.now());
         } else {
-            proposal.setStatus(existing == null ? 0 : existing.getStatus() == 4 ? 4 : 0);
+            // P5: 保存草稿始终置为草稿(0)，退回状态不再持久化——学生开始编辑即代表"草稿中"
+            proposal.setStatus(0);
         }
 
         if (proposal.getId() == null) {
             proposalMapper.insert(proposal);
         } else {
             proposalMapper.updateById(proposal);
+        }
+
+        if (submit) {
+            User student = userMapper.selectById(studentId);
+            String studentName = student != null ? student.getRealName() : "学生";
+            notificationService.proposalSubmitted(proposal.getTeacherId(), proposal.getId(), studentName);
         }
         return Result.ok(proposal);
     }
@@ -92,6 +104,12 @@ public class ProposalService {
             proposal.setRejectReason(rejectReason);
         }
         proposalMapper.updateById(proposal);
+
+        if (pass) {
+            notificationService.proposalTeacherPassed(proposal.getStudentId(), proposalId);
+        } else {
+            notificationService.proposalTeacherRejected(proposal.getStudentId(), proposalId, rejectReason);
+        }
         return Result.ok();
     }
 
@@ -121,6 +139,14 @@ public class ProposalService {
             proposal.setRejectReason(rejectReason);
         }
         proposalMapper.updateById(proposal);
+
+        if (pass) {
+            // 评审分自动同步到综合成绩的"开题"分项（10%权重）
+            scoreService.saveProposalScore(proposal.getSelectionId(), reviewScore);
+            notificationService.proposalDeptPassed(proposal.getStudentId(), proposalId, reviewScore);
+        } else {
+            notificationService.proposalDeptRejected(proposal.getStudentId(), proposalId, rejectReason);
+        }
         return Result.ok();
     }
 

@@ -3,10 +3,14 @@
     <div class="page-card">
       <div class="toolbar">
         <span class="section-title">论文审阅</span>
+        <el-radio-group v-model="statusFilter" size="small" @change="loadList">
+          <el-radio-button label="pending">待审阅</el-radio-button>
+          <el-radio-button label="all">全部</el-radio-button>
+        </el-radio-group>
       </div>
 
       <div class="table-scroll">
-        <el-table :data="list" v-loading="loading" stripe>
+        <el-table :data="displayList" v-loading="loading" stripe>
           <el-table-column prop="studentName" label="学生"   width="90" />
           <el-table-column prop="topicTitle"  label="课题"   min-width="200" show-overflow-tooltip />
           <el-table-column label="版本" width="80" align="center">
@@ -26,7 +30,11 @@
               </el-tag>
             </template>
           </el-table-column>
-          <el-table-column prop="createTime" label="提交时间" width="160" />
+          <el-table-column label="提交时间" width="160">
+            <template #default="{ row }">
+              {{ row.createTime ? dayjs(row.createTime).format('YYYY-MM-DD HH:mm') : '—' }}
+            </template>
+          </el-table-column>
           <el-table-column label="操作" width="200">
             <template #default="{ row }">
               <el-button link type="primary" @click="download(row.fileUrl)"
@@ -40,7 +48,7 @@
           </el-table-column>
 
           <template #empty>
-            <el-empty description="暂无待审阅的论文" />
+            <el-empty :description="statusFilter === 'pending' ? '暂无待审阅的论文' : '暂无论文记录'" />
           </template>
         </el-table>
       </div>
@@ -66,8 +74,9 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import dayjs from 'dayjs'
 import { thesisApi } from '@/api'
 import { useAuthStore } from '@/stores/auth'
 import {
@@ -80,6 +89,10 @@ const auth = useAuthStore()
 const loading = ref(false)
 const saving = ref(false)
 const list = ref([])
+const statusFilter = ref('pending')
+const displayList = computed(() =>
+  statusFilter.value === 'pending' ? list.value.filter(r => r.status === 0) : list.value
+)
 const dialogVisible = ref(false)
 const selected = ref(null)
 const reviewForm = ref({ comment: '' })

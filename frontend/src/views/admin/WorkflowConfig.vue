@@ -51,8 +51,9 @@ import { ElMessage } from 'element-plus'
 import { workflowApi } from '@/api'
 import dayjs from 'dayjs'
 
-const year = ref(new Date().getFullYear())
-const years = [2024, 2025, 2026, 2027]
+const curYear = new Date().getFullYear()
+const year = ref(curYear)
+const years = [curYear - 1, curYear, curYear + 1, curYear + 2]
 const stages = ref([])
 const saving = ref(false)
 

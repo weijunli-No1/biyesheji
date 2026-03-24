@@ -23,11 +23,12 @@
           <el-select v-model="query.status" clearable style="width:120px">
             <el-option label="待审批" :value="0" />
             <el-option label="已发布" :value="1" />
+            <el-option label="已关闭" :value="2" />
             <el-option label="已驳回" :value="3" />
           </el-select>
         </el-form-item>
         <el-form-item>
-          <el-button type="primary" native-type="submit" @click="loadData">查询</el-button>
+          <el-button type="primary" native-type="submit">查询</el-button>
           <el-button @click="reset">重置</el-button>
         </el-form-item>
       </el-form>
@@ -99,6 +100,9 @@
                 <el-button link type="success" @click="doApprove(row, true)">通过</el-button>
                 <el-button link type="danger" @click="doApprove(row, false)">驳回</el-button>
               </template>
+              <!-- 管理员关闭已发布课题 -->
+              <el-button v-if="auth.isManager && row.status === 1"
+                link type="info" @click="doClose(row)">关闭</el-button>
             </template>
           </el-table-column>
 
@@ -124,7 +128,8 @@
           <el-descriptions-item label="课题类型">
             <el-tag size="small">{{ topicTypeLabels[selected.type] }}</el-tag>
           </el-descriptions-item>
-          <el-descriptions-item label="指导教师">{{ selected.teacherName }}</el-descriptions-item>
+          <el-descriptions-item label="指导教师">{{ selected.teacherName || '—' }}</el-descriptions-item>
+          <el-descriptions-item label="所属院系">{{ selected.collegeName || '—' }}</el-descriptions-item>
           <el-descriptions-item label="招收名额">
             {{ selected.selectedCount }}/{{ selected.maxStudents }} 人
             <el-tag v-if="selected.selectedCount >= selected.maxStudents" type="danger" size="small" style="margin-left:8px">已满</el-tag>
@@ -171,7 +176,7 @@ const curYear = new Date().getFullYear()
 const yearOptions = [curYear - 1, curYear, curYear + 1]
 
 const query = ref({
-  page: 1, size: 10, keyword: '',
+  page: 1, size: 10, keyword: '', type: undefined,
   status: auth.isStudent ? 1 : undefined,
   year: auth.isManager ? undefined : curYear
 })
@@ -197,7 +202,7 @@ async function loadData() {
 
 function reset() {
   query.value = {
-    page: 1, size: 10, keyword: '',
+    page: 1, size: 10, keyword: '', type: undefined,
     status: auth.isStudent ? 1 : undefined,
     year: auth.isManager ? undefined : curYear
   }
@@ -232,6 +237,13 @@ async function doApprove(row, approve) {
     await topicApi.approve(row.id, { approve: true })
   }
   ElMessage.success(approve ? '已通过审批' : '已驳回')
+  loadData()
+}
+
+async function doClose(row) {
+  await ElMessageBox.confirm(`确认关闭课题「${row.title}」？关闭后学生将无法选择该课题。`, '关闭确认', { type: 'warning' })
+  await topicApi.close(row.id)
+  ElMessage.success('课题已关闭')
   loadData()
 }
 

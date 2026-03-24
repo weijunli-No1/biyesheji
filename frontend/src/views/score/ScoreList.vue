@@ -10,8 +10,13 @@
 
     <div class="page-card">
       <el-form inline :model="query">
+        <el-form-item label="学生">
+          <el-input v-model="query.keyword" placeholder="姓名或学号" clearable
+            style="width:160px" @keyup.enter="loadData" />
+        </el-form-item>
         <el-form-item>
           <el-button type="primary" @click="loadData">查询</el-button>
+          <el-button @click="() => { query.keyword = ''; loadData() }">重置</el-button>
           <el-button v-if="auth.isManager" @click="exportScores">导出 Excel</el-button>
         </el-form-item>
       </el-form>
@@ -67,10 +72,15 @@
           </el-table-column>
           <el-table-column label="操作" width="220" fixed="right">
             <template #default="{ row }">
-              <!-- 导师：只能录入自己的导师评分 -->
+              <!-- 指导教师：录入导师评分 -->
               <el-button v-if="auth.isTeacher && !row.isLocked"
                 link type="primary" @click="editTeacherScore(row)">
                 录入导师分
+              </el-button>
+              <!-- 评阅教师：录入评阅评分 -->
+              <el-button v-if="auth.isReviewer && !row.isLocked"
+                link type="warning" @click="openReviewScoreDialog(row)">
+                录入评阅分
               </el-button>
               <!-- 管理员：录入各项分数 + 锁定 -->
               <template v-if="auth.isManager">
@@ -116,20 +126,44 @@
       </template>
     </el-dialog>
 
+    <!-- 评阅教师录入评阅分对话框 -->
+    <el-dialog v-model="reviewScoreDialogVisible" title="录入评阅评分" :width="dialogWidth">
+      <el-alert type="info" :closable="false" style="margin-bottom:16px"
+        description="评阅评分占综合成绩 20%，请仔细阅读论文后客观评分" />
+      <el-form v-if="editRow" :model="reviewScoreForm" label-width="100px">
+        <el-form-item label="学生">
+          {{ editRow.studentName }}（{{ editRow.studentNo }}）
+        </el-form-item>
+        <el-form-item label="评阅评分">
+          <el-input-number v-model="reviewScoreForm.reviewScore" :min="0" :max="100" />
+          <span class="text-secondary" style="margin-left:8px">分（0–100）</span>
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="reviewScoreDialogVisible = false">取消</el-button>
+        <el-button type="primary" @click="saveReviewScore" :loading="savingScore">保存</el-button>
+      </template>
+    </el-dialog>
+
     <!-- 管理员录入各项分数对话框 -->
     <el-dialog v-model="adminScoreDialogVisible" title="录入各项成绩" :width="dialogWidth">
       <el-alert type="warning" :closable="false" style="margin-bottom:16px"
         description="综合成绩 = 开题×10% + 导师×30% + 评阅×20% + 答辩×40%，请确认数据准确后再保存" />
-      <el-form v-if="editRow" :model="adminScoreForm" label-width="110px">
+      <el-form v-if="editRow" :model="adminScoreForm" label-width="120px">
         <el-form-item label="学生">{{ editRow.studentName }}（{{ editRow.studentNo }}）</el-form-item>
         <el-form-item label="开题评分 (10%)">
           <el-input-number v-model="adminScoreForm.proposalScore" :min="0" :max="100" :precision="0" />
+          <span class="text-secondary" style="margin-left:8px;font-size:12px">评审通过后自动同步</span>
+        </el-form-item>
+        <el-form-item label="导师评分 (30%)">
+          <el-input-number v-model="adminScoreForm.teacherScore" :min="0" :max="100" :precision="0" />
         </el-form-item>
         <el-form-item label="评阅评分 (20%)">
           <el-input-number v-model="adminScoreForm.reviewScore" :min="0" :max="100" :precision="0" />
         </el-form-item>
         <el-form-item label="答辩评分 (40%)">
           <el-input-number v-model="adminScoreForm.defenseScore" :min="0" :max="100" :precision="0" />
+          <span class="text-secondary" style="margin-left:8px;font-size:12px">答辩录入后自动同步</span>
         </el-form-item>
       </el-form>
       <template #footer>
@@ -154,13 +188,15 @@ const savingScore = ref(false)
 const list = ref([])
 const total = ref(0)
 const stats = ref(null)
-const query = ref({ page: 1, size: 10 })
+const query = ref({ page: 1, size: 10, keyword: '' })
 
 const teacherDialogVisible = ref(false)
+const reviewScoreDialogVisible = ref(false)
 const adminScoreDialogVisible = ref(false)
 const editRow = ref(null)
 const teacherForm = ref({ teacherScore: null, teacherComment: '' })
-const adminScoreForm = ref({ proposalScore: null, reviewScore: null, defenseScore: null })
+const reviewScoreForm = ref({ reviewScore: null })
+const adminScoreForm = ref({ proposalScore: null, teacherScore: null, reviewScore: null, defenseScore: null })
 
 const dialogWidth = computed(() => window.innerWidth <= 640 ? '92%' : '480px')
 
@@ -185,10 +221,30 @@ function editTeacherScore(row) {
   teacherDialogVisible.value = true
 }
 
+function openReviewScoreDialog(row) {
+  editRow.value = row
+  reviewScoreForm.value = { reviewScore: row.reviewScore ?? null }
+  reviewScoreDialogVisible.value = true
+}
+
+async function saveReviewScore() {
+  if (reviewScoreForm.value.reviewScore === null) return ElMessage.warning('请填写评阅评分')
+  savingScore.value = true
+  try {
+    await scoreApi.saveReviewScore(editRow.value.selectionId, reviewScoreForm.value)
+    ElMessage.success('评阅评分已保存')
+    reviewScoreDialogVisible.value = false
+    loadData()
+  } finally {
+    savingScore.value = false
+  }
+}
+
 function openAdminScoreDialog(row) {
   editRow.value = row
   adminScoreForm.value = {
     proposalScore: row.proposalScore ?? null,
+    teacherScore: row.teacherScore ?? null,
     reviewScore: row.reviewScore ?? null,
     defenseScore: row.defenseScore ?? null
   }
@@ -212,9 +268,10 @@ async function saveAdminScores() {
   savingScore.value = true
   try {
     const sid = editRow.value.selectionId
-    const { proposalScore, reviewScore, defenseScore } = adminScoreForm.value
+    const { proposalScore, teacherScore, reviewScore, defenseScore } = adminScoreForm.value
     const tasks = []
     if (proposalScore !== null) tasks.push(scoreApi.saveProposalScore(sid, { proposalScore }))
+    if (teacherScore !== null)  tasks.push(scoreApi.saveTeacherScore(sid, { teacherScore }))
     if (reviewScore !== null)   tasks.push(scoreApi.saveReviewScore(sid, { reviewScore }))
     if (defenseScore !== null)  tasks.push(scoreApi.saveDefenseScore(sid, { defenseScore }))
     await Promise.all(tasks)

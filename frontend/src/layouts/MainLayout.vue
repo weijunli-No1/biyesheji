@@ -41,6 +41,11 @@
           <el-menu-item index="/scores"><el-icon><Trophy /></el-icon><template #title>成绩录入</template></el-menu-item>
         </template>
 
+        <!-- 评阅教师菜单 -->
+        <template v-if="auth.isReviewer">
+          <el-menu-item index="/scores"><el-icon><Trophy /></el-icon><template #title>评阅录分</template></el-menu-item>
+        </template>
+
         <!-- 答辩委员菜单 -->
         <template v-if="auth.isDefenseMember">
           <el-menu-item index="/defense"><el-icon><Microphone /></el-icon><template #title>答辩管理</template></el-menu-item>
@@ -65,6 +70,7 @@
             <el-menu-item index="/workflow">时间节点配置</el-menu-item>
             <el-menu-item v-if="auth.isCollegeAdmin || auth.isAdmin" index="/org">组织架构管理</el-menu-item>
             <el-menu-item index="/users">用户管理</el-menu-item>
+            <el-menu-item index="/import">批量导入</el-menu-item>
           </el-sub-menu>
         </template>
       </el-menu>
@@ -86,6 +92,7 @@
           </el-breadcrumb>
         </div>
         <div class="header-right">
+          <NotificationBell style="margin-right:8px;" />
           <el-dropdown @command="handleCommand">
             <div class="user-info">
               <el-avatar size="small" :style="{ background: '#1a6af0' }" aria-label="用户头像">
@@ -123,6 +130,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { ElMessageBox } from 'element-plus'
 import { useAuthStore } from '@/stores/auth'
 import { roleNames, roleTagTypes } from '@/utils/statusConfig'
+import NotificationBell from '@/components/NotificationBell.vue'
 
 const auth = useAuthStore()
 const route = useRoute()

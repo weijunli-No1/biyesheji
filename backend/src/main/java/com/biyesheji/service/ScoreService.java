@@ -5,8 +5,10 @@ import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.biyesheji.common.PageResult;
 import com.biyesheji.common.Result;
 import com.biyesheji.dto.ScoreVO;
+import com.biyesheji.entity.DefenseRecord;
 import com.biyesheji.entity.Score;
 import com.biyesheji.entity.TopicSelection;
+import com.biyesheji.mapper.DefenseRecordMapper;
 import com.biyesheji.mapper.ScoreMapper;
 import com.biyesheji.mapper.TopicSelectionMapper;
 import lombok.RequiredArgsConstructor;
@@ -20,6 +22,7 @@ public class ScoreService {
 
     private final ScoreMapper scoreMapper;
     private final TopicSelectionMapper selectionMapper;
+    private final DefenseRecordMapper defenseRecordMapper;
 
     // 各项权重
     private static final BigDecimal WEIGHT_PROPOSAL = new BigDecimal("0.10");
@@ -33,12 +36,13 @@ public class ScoreService {
      */
     public Result<Score> saveTeacherScore(Long selectionId, Long teacherId,
                                           Integer teacherScore, String teacherComment) {
-        // 验证该选题确实属于这位导师
         TopicSelection selection = selectionMapper.selectById(selectionId);
-        if (selection == null || !selection.getTeacherId().equals(teacherId)) {
+        if (selection == null) return Result.fail(404, "选题记录不存在");
+        // teacherId != null 时（导师操作）校验归属；null 时（管理员操作）跳过
+        if (teacherId != null && !selection.getTeacherId().equals(teacherId)) {
             return Result.fail(403, "只能录入自己指导的学生成绩");
         }
-        Score score = getOrCreate(selectionId, selection.getStudentId(), teacherId);
+        Score score = getOrCreate(selectionId, selection.getStudentId(), selection.getTeacherId());
         if (score.getIsLocked() == 1) return Result.fail(400, "成绩已锁定，不可修改");
 
         score.setTeacherScore(teacherScore);
@@ -86,13 +90,28 @@ public class ScoreService {
 
     /**
      * 成绩锁定（仅管理员可操作）
-     * 锁定前校验：四项分数均已录入
+     * 锁定前校验：
+     * 1. 四项分数均已录入
+     * 2. 答辩记录存在且结果不为「不通过(3)」
+     * 3. 「修改后通过(2)」须管理员已确认修改完成
      */
     public Result<?> lockScore(Long selectionId) {
         Score score = scoreMapper.selectOne(new LambdaQueryWrapper<Score>()
                 .eq(Score::getSelectionId, selectionId));
         if (score == null) return Result.fail("成绩记录不存在");
         if (score.getIsLocked() == 1) return Result.fail(400, "成绩已锁定");
+
+        // 答辩状态前置校验
+        DefenseRecord defenseRecord = defenseRecordMapper.selectOne(new LambdaQueryWrapper<DefenseRecord>()
+                .eq(DefenseRecord::getSelectionId, selectionId)
+                .last("LIMIT 1"));
+        if (defenseRecord == null || defenseRecord.getResult() == null)
+            return Result.fail(400, "学生尚未完成答辩，无法锁定成绩");
+        if (defenseRecord.getResult() == 3)
+            return Result.fail(400, "答辩结果为「不通过」，无法锁定成绩");
+        if (defenseRecord.getResult() == 2 && !Integer.valueOf(1).equals(defenseRecord.getRevisionConfirmed()))
+            return Result.fail(400, "答辩结果为「修改后通过」，请先确认学生修改完成后再锁定");
+
         if (score.getProposalScore() == null) return Result.fail(400, "开题评分未录入，无法锁定");
         if (score.getTeacherScore() == null)  return Result.fail(400, "导师评分未录入，无法锁定");
         if (score.getReviewScore() == null)   return Result.fail(400, "评阅评分未录入，无法锁定");
@@ -103,8 +122,8 @@ public class ScoreService {
         return Result.ok();
     }
 
-    public Result<PageResult<ScoreVO>> listScores(int page, int size, Long collegeId, Long majorId, Long teacherId) {
-        Page<ScoreVO> p = scoreMapper.selectScoreList(new Page<>(page, size), collegeId, majorId, teacherId);
+    public Result<PageResult<ScoreVO>> listScores(int page, int size, Long collegeId, Long majorId, Long teacherId, String keyword) {
+        Page<ScoreVO> p = scoreMapper.selectScoreList(new Page<>(page, size), collegeId, majorId, teacherId, keyword);
         return Result.ok(PageResult.of(p));
     }
 

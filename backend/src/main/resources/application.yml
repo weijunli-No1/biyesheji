@@ -22,6 +22,17 @@ spring:
       max-file-size: 50MB
       max-request-size: 50MB
 
+  mail:
+    host: smtp.qq.com
+    port: 587
+    username: your-email@qq.com
+    password: your-smtp-password
+    default-encoding: UTF-8
+    properties:
+      mail.smtp.auth: true
+      mail.smtp.starttls.enable: true
+    # enabled: false  # 未配置 SMTP 时设为 false 关闭邮件发送
+
 mybatis-plus:
   configuration:
     map-underscore-to-camel-case: true
@@ -41,6 +52,19 @@ minio:
   accessKey: minioadmin
   secretKey: minioadmin
   bucket: biyesheji
+
+# 应用配置
+app:
+  # 文件上传本地存储路径（相对于工作目录，或填绝对路径）
+  upload-path: ./uploads
+  # 系统名称（用于邮件主题前缀）
+  name: 毕业设计管理系统
+  # 前端访问地址（用于邮件中的跳转链接）
+  frontend-url: http://localhost:5173
+  # 通知：邮件开关
+  notify:
+    email-enabled: false   # 未配置 SMTP 前设为 false
+    sse-enabled: true      # 站内实时推送
 
 springdoc:
   swagger-ui:

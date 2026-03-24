@@ -21,6 +21,7 @@ export const topicApi = {
   apply: (data) => request.post('/topics', data),
   update: (id, data) => request.put(`/topics/${id}`, data),
   approve: (id, data) => request.post(`/topics/${id}/approve`, data),
+  close: (id) => request.post(`/topics/${id}/close`),
   myTopics: () => request.get('/topics/my'),
   delete: (id) => request.delete(`/topics/${id}`),
   select: (id, year) => request.post(`/topics/${id}/select`, null, { params: { year } }),
@@ -92,6 +93,7 @@ export const defenseApi = {
   listGroupStudents: (groupId) => request.get(`/defense/groups/${groupId}/students`),
   assignStudent: (groupId, selectionId) => request.post(`/defense/groups/${groupId}/students`, { selectionId }),
   saveRecord: (data) => request.post('/defense/records', data),
+  confirmRevision: (recordId) => request.post(`/defense/records/${recordId}/confirm-revision`),
   myRecord: () => request.get('/defense/records/my'),
   unassignedStudents: (year) => request.get('/defense/students/unassigned', { params: { year } }),
 }
@@ -119,4 +121,34 @@ export const fileApi = {
   upload: (formData) => request.post('/files/upload', formData, {
     headers: { 'Content-Type': 'multipart/form-data' }
   }),
+}
+
+// 通知管理
+export const notificationApi = {
+  list:        (params) => request.get('/notifications', { params }),
+  unreadCount: ()       => request.get('/notifications/unread-count'),
+  recent:      ()       => request.get('/notifications/recent'),
+  markRead:    (id)     => request.post(`/notifications/${id}/read`),
+  markAllRead: ()       => request.post('/notifications/read-all'),
+}
+
+// 批量导入
+export const importApi = {
+  importStudents: (formData, year) => request.post('/import/students', formData, {
+    params: { year },
+    headers: { 'Content-Type': 'multipart/form-data' }
+  }),
+  importTeachers: (formData) => request.post('/import/teachers', formData, {
+    headers: { 'Content-Type': 'multipart/form-data' }
+  }),
+  history: () => request.get('/import/history'),
+  templateUrl: (type) => `/api/import/template/${type}`,
+}
+
+// 论文批注
+export const annotationApi = {
+  add:     (data)      => request.post('/thesis/annotations', data),
+  list:    (thesisId)  => request.get(`/thesis/annotations/${thesisId}`),
+  resolve: (id)        => request.post(`/thesis/annotations/${id}/resolve`),
+  delete:  (id)        => request.delete(`/thesis/annotations/${id}`),
 }

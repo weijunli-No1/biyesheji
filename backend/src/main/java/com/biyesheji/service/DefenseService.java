@@ -33,7 +33,7 @@ public class DefenseService {
 
     /** 创建答辩小组 */
     public Result<DefenseGroup> createGroup(DefenseGroup group) {
-        if (group.getYear() == null) group.setYear(2026);
+        if (group.getYear() == null) group.setYear(java.time.LocalDate.now().getYear());
         groupMapper.insert(group);
         return Result.ok(group);
     }
@@ -58,12 +58,14 @@ public class DefenseService {
                 .last("LIMIT 1"));
         if (existing != null) {
             existing.setGroupId(groupId);
+            existing.setDefenseTime(group.getDefenseTime());
             recordMapper.updateById(existing);
         } else {
             DefenseRecord record = new DefenseRecord();
             record.setSelectionId(selectionId);
             record.setStudentId(selection.getStudentId());
             record.setGroupId(groupId);
+            record.setDefenseTime(group.getDefenseTime());
             record.setDefenseRound(1);
             recordMapper.insert(record);
         }
@@ -99,12 +101,28 @@ public class DefenseService {
 
         recordMapper.updateById(record);
 
-        // 同步答辩分到综合成绩表
-        if (record.getTotalScore() != null) {
+        // 仅「通过」或「修改后通过」才将答辩分同步到综合成绩表
+        // 「不通过」不同步：学生流程未完成，分数无意义
+        if (record.getTotalScore() != null && record.getResult() != null && record.getResult() != 3) {
             scoreService.saveDefenseScore(selectionId, record.getTotalScore());
         }
 
         return Result.ok(record);
+    }
+
+    /**
+     * 管理员确认「修改后通过」学生的修改已完成，解锁成绩锁定资格
+     */
+    public Result<?> confirmRevision(Long recordId) {
+        DefenseRecord record = recordMapper.selectById(recordId);
+        if (record == null) return Result.fail("答辩记录不存在");
+        if (record.getResult() == null || record.getResult() != 2)
+            return Result.fail(400, "只有「修改后通过」状态的记录才需要确认修改");
+        if (Integer.valueOf(1).equals(record.getRevisionConfirmed()))
+            return Result.fail(400, "该记录已确认修改完成");
+        record.setRevisionConfirmed(1);
+        recordMapper.updateById(record);
+        return Result.ok();
     }
 
     /** 学生查看自己的答辩记录 */

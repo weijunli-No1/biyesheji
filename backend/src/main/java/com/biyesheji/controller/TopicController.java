@@ -27,13 +27,14 @@ public class TopicController {
                           @RequestParam(defaultValue = "10") int size,
                           @RequestParam(required = false) Integer year,
                           @RequestParam(required = false) String keyword,
+                          @RequestParam(required = false) Integer type,
                           @RequestParam(required = false) Integer status,
                           @RequestParam(required = false) Long teacherId,
                           @AuthenticationPrincipal UserDetailsImpl user) {
         int role = Optional.ofNullable(user).map(u -> u.getUser().getRole()).orElse(0);
         Long collegeId = (role == 6) ? user.getUser().getCollegeId() : null;
         Long majorId   = (role == 5) ? user.getUser().getMajorId()   : null;
-        return topicService.listTopics(page, size, year, keyword, status, teacherId, collegeId, majorId);
+        return topicService.listTopics(page, size, year, keyword, type, status, teacherId, collegeId, majorId);
     }
 
     @GetMapping("/{id}")
@@ -87,6 +88,17 @@ public class TopicController {
         String reason = (String) body.get("rejectReason");
         int role = user.getUser().getRole();
         return topicService.approveTopic(id, approve, reason, role,
+                user.getUser().getCollegeId(), user.getUser().getMajorId());
+    }
+
+    /** P3: 管理员关闭已发布课题 */
+    @PostMapping("/{id}/close")
+    @PreAuthorize("hasAnyRole('MAJOR_ADMIN','COLLEGE_ADMIN','ADMIN')")
+    @Operation(summary = "关闭课题（管理员，仅已发布可关闭）")
+    public Result<?> close(@PathVariable Long id,
+                           @AuthenticationPrincipal UserDetailsImpl user) {
+        int role = user.getUser().getRole();
+        return topicService.closeTopic(id, role,
                 user.getUser().getCollegeId(), user.getUser().getMajorId());
     }
 

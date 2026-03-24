@@ -125,7 +125,7 @@ const roleName = computed(() => roleNames[auth.role] || '')
 // ---- 学生状态文本计算 ----
 const selectionStatusMap = { 0: '待确认', 1: '已确认', 2: '已拒绝', 3: '已解除' }
 const selectionColorMap  = { 0: '#e6a23c', 1: '#67c23a', 2: '#f56c6c', 3: '#909399' }
-const proposalStatusMap  = { 0: '草稿', 1: '待审核', 2: '待评审', 3: '已通过', 4: '已退回' }
+const proposalStatusMap  = { 0: '草稿', 1: '待导师审核', 2: '导师已通过', 3: '评审已通过', 4: '已退回' }
 const proposalColorMap   = { 0: '#909399', 1: '#e6a23c', 2: '#1a6af0', 3: '#67c23a', 4: '#f56c6c' }
 const midCheckStatusMap  = { 0: '未提交', 1: '待审核', 2: '已通过', 3: '已退回' }
 const midCheckColorMap   = { 0: '#909399', 1: '#e6a23c', 2: '#67c23a', 3: '#f56c6c' }

@@ -42,13 +42,9 @@
 
         <el-form ref="formRef" :model="form" :rules="rules" label-width="110px"
           :disabled="lastVersionPending">
-          <el-form-item label="版本类型" prop="versionType">
-            <el-select v-model="form.versionType" style="width:180px">
-              <el-option label="初稿（第一次提交）" :value="1" />
-              <el-option label="修改稿（导师退回后修改）" :value="2" />
-              <el-option label="送审稿（提交评审）" :value="3" />
-              <el-option label="定稿（最终版本）" :value="4" />
-            </el-select>
+          <el-form-item label="版本类型">
+            <el-tag>{{ versionTypeLabels[form.versionType] }}</el-tag>
+            <span class="text-secondary" style="margin-left:8px;font-size:12px">（系统自动判断）</span>
           </el-form-item>
           <el-form-item label="论文文件" prop="fileUrl">
             <el-upload drag action="/api/files/upload" :headers="uploadHeaders"
@@ -101,7 +97,6 @@ const uploadHeaders = computed(() => ({ Authorization: `Bearer ${auth.token}` })
 const form = ref({ versionType: 1, fileUrl: '', fileName: '', fileSize: 0 })
 
 const rules = {
-  versionType: [{ required: true, message: '请选择版本类型' }],
   fileUrl: [{ required: true, message: '请上传论文文件' }],
 }
 
@@ -153,6 +148,15 @@ async function loadVersions() {
   if (!selectionId.value) return
   const res = await thesisApi.versions(selectionId.value)
   versions.value = res.data || []
+  // P14: 根据提交历史自动推断下一版本类型
+  const count = versions.value.length
+  if (count === 0) {
+    form.value.versionType = 1 // 初稿
+  } else if (versions.value[0]?.status === 1) {
+    form.value.versionType = 2 // 上一版被退回 → 修改稿
+  } else {
+    form.value.versionType = 2 // 默认修改稿，学生无需手动选
+  }
 }
 
 async function loadProposalStatus() {

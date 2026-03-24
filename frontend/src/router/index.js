@@ -12,9 +12,9 @@ const routes = [
 
       // ---- 课题管理 ----
       { path: 'topics',       component: () => import('@/views/topic/TopicList.vue'),     meta: { title: '课题列表' } },
+      { path: 'topics/my',    component: () => import('@/views/topic/MyTopics.vue'),      meta: { title: '我的课题',  roles: [2] } },
       { path: 'topics/apply', component: () => import('@/views/topic/TopicApply.vue'),    meta: { title: '申报课题',  parent: '课题管理', roles: [2] } },
       { path: 'topics/:id',   component: () => import('@/views/topic/TopicDetail.vue'),   meta: { title: '课题详情',  parent: '课题列表' } },
-      { path: 'topics/my',    component: () => import('@/views/topic/MyTopics.vue'),      meta: { title: '我的课题',  roles: [2] } },
       { path: 'selections',   component: () => import('@/views/topic/SelectionList.vue'), meta: { title: '选题管理',  parent: '课题管理', roles: [2, 5, 6, 7] } },
 
       // ---- 开题报告 ----
@@ -34,13 +34,17 @@ const routes = [
       { path: 'defense/my', component: () => import('@/views/defense/MyDefense.vue'),  meta: { title: '我的答辩', roles: [1] } },
 
       // ---- 成绩管理 ----
-      { path: 'scores',   component: () => import('@/views/score/ScoreList.vue'), meta: { title: '成绩管理', roles: [2, 5, 6, 7] } },
+      { path: 'scores',   component: () => import('@/views/score/ScoreList.vue'), meta: { title: '成绩管理', roles: [2, 3, 5, 6, 7] } },
       { path: 'score/my', component: () => import('@/views/score/MyScore.vue'),   meta: { title: '我的成绩', roles: [1] } },
 
       // ---- 系统管理 ----
       { path: 'workflow', component: () => import('@/views/admin/WorkflowConfig.vue'), meta: { title: '时间节点配置', parent: '系统管理', roles: [5, 6, 7] } },
       { path: 'org',      component: () => import('@/views/admin/OrgManage.vue'),      meta: { title: '组织架构管理',  parent: '系统管理', roles: [6, 7] } },
       { path: 'users',    component: () => import('@/views/admin/UserList.vue'),        meta: { title: '用户管理',      parent: '系统管理', roles: [5, 6, 7] } },
+      { path: 'import',   component: () => import('@/views/admin/ImportManager.vue'),   meta: { title: '批量导入',      parent: '系统管理', roles: [5, 6, 7] } },
+
+      // ---- 通知 ----
+      { path: 'notifications', component: () => import('@/views/NotificationPage.vue'), meta: { title: '消息通知' } },
     ]
   },
   { path: '/:pathMatch(.*)*', redirect: '/' }

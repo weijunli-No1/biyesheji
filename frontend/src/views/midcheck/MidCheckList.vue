@@ -4,6 +4,10 @@
       <div class="toolbar">
         <span class="section-title">中期检查管理</span>
         <el-form inline :model="query" style="margin-bottom:0">
+          <el-form-item label="关键词">
+            <el-input v-model="query.keyword" placeholder="学生姓名/学号" clearable
+              style="width:160px" @keyup.enter="load" />
+          </el-form-item>
           <el-form-item label="状态">
             <el-select v-model="query.status" clearable style="width:120px">
               <el-option label="未提交" :value="0" />
@@ -14,12 +18,13 @@
           </el-form-item>
           <el-form-item>
             <el-button type="primary" @click="load">查询</el-button>
+            <el-button @click="reset">重置</el-button>
           </el-form-item>
         </el-form>
       </div>
 
       <div class="table-scroll">
-        <el-table :data="list" v-loading="loading" stripe>
+        <el-table :data="list" v-loading="loading" stripe style="margin-top:8px">
           <el-table-column prop="studentNo"   label="学号" width="130" />
           <el-table-column prop="studentName" label="学生" width="90" />
           <el-table-column prop="topicTitle"  label="课题" min-width="180" show-overflow-tooltip />
@@ -38,7 +43,11 @@
               </el-tag>
             </template>
           </el-table-column>
-          <el-table-column prop="submitTime" label="提交时间" width="160" />
+          <el-table-column label="提交时间" width="160">
+            <template #default="{ row }">
+              {{ row.submitTime ? dayjs(row.submitTime).format('YYYY-MM-DD HH:mm') : '—' }}
+            </template>
+          </el-table-column>
           <el-table-column label="操作" width="180">
             <template #default="{ row }">
               <el-button link type="primary" @click="view(row)">查看</el-button>
@@ -52,6 +61,9 @@
           </template>
         </el-table>
       </div>
+
+      <el-pagination class="pagination-row" v-model:current-page="query.page"
+        :total="total" layout="total, prev, pager, next" @change="load" />
     </div>
 
     <!-- 查看/审核对话框 -->
@@ -91,6 +103,7 @@
 <script setup>
 import { ref, computed, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import dayjs from 'dayjs'
 import { midCheckApi } from '@/api'
 import { useAuthStore } from '@/stores/auth'
 import {
@@ -102,11 +115,12 @@ const auth = useAuthStore()
 const loading = ref(false)
 const saving = ref(false)
 const list = ref([])
+const total = ref(0)
 const dialogVisible = ref(false)
 const reviewMode = ref(false)
 const selected = ref(null)
 const reviewForm = ref({ progress: 1, comment: '' })
-const query = ref({ status: undefined })
+const query = ref({ page: 1, size: 10, keyword: '', status: auth.isTeacher ? 1 : undefined })
 
 const dialogWidth = computed(() => window.innerWidth <= 640 ? '92%' : '600px')
 
@@ -114,10 +128,21 @@ async function load() {
   loading.value = true
   try {
     const res = await midCheckApi.list(query.value)
-    list.value = res.data?.records || res.data || []
+    if (res.data?.records !== undefined) {
+      list.value = res.data.records
+      total.value = res.data.total
+    } else {
+      list.value = res.data || []
+      total.value = list.value.length
+    }
   } finally {
     loading.value = false
   }
+}
+
+function reset() {
+  query.value = { page: 1, size: 10, keyword: '', status: auth.isTeacher ? 1 : undefined }
+  load()
 }
 
 function view(row) {
@@ -166,3 +191,7 @@ async function doReject() {
 
 onMounted(load)
 </script>
+
+<style scoped>
+.pagination-row { margin-top: 16px; display: flex; justify-content: flex-end; }
+</style>

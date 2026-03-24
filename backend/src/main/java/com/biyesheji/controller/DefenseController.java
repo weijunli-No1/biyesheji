@@ -59,6 +59,13 @@ public class DefenseController {
         return defenseService.saveRecord(body);
     }
 
+    @PostMapping("/records/{recordId}/confirm-revision")
+    @PreAuthorize("hasAnyRole('MAJOR_ADMIN','COLLEGE_ADMIN','ADMIN')")
+    @Operation(summary = "确认修改后通过学生已完成修改（解锁锁定资格）")
+    public Result<?> confirmRevision(@PathVariable Long recordId) {
+        return defenseService.confirmRevision(recordId);
+    }
+
     @GetMapping("/records/my")
     @Operation(summary = "学生查看自己的答辩记录")
     public Result<?> myRecord(@AuthenticationPrincipal UserDetailsImpl user) {
