@@ -81,10 +81,13 @@ public class TopicController {
     @PostMapping("/{id}/approve")
     @PreAuthorize("hasAnyRole('MAJOR_ADMIN','COLLEGE_ADMIN','ADMIN')")
     @Operation(summary = "审批课题（院系管理员，仅待审批可操作）")
-    public Result<?> approve(@PathVariable Long id, @RequestBody Map<String, Object> body) {
+    public Result<?> approve(@PathVariable Long id, @RequestBody Map<String, Object> body,
+                             @AuthenticationPrincipal UserDetailsImpl user) {
         boolean approve = Boolean.TRUE.equals(body.get("approve"));
         String reason = (String) body.get("rejectReason");
-        return topicService.approveTopic(id, approve, reason);
+        int role = user.getUser().getRole();
+        return topicService.approveTopic(id, approve, reason, role,
+                user.getUser().getCollegeId(), user.getUser().getMajorId());
     }
 
     @GetMapping("/my")

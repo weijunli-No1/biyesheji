@@ -27,6 +27,7 @@ public interface TopicSelectionMapper extends BaseMapper<TopicSelection> {
             "LEFT JOIN topic t ON ts.topic_id = t.id " +
             "LEFT JOIN user u_s ON ts.student_id = u_s.id " +
             "LEFT JOIN user u_t ON ts.teacher_id = u_t.id " +
-            "WHERE ts.teacher_id = #{teacherId} AND ts.status = 1 AND ts.deleted = 0")
+            "WHERE ts.teacher_id = #{teacherId} AND ts.status IN (0, 1) AND ts.deleted = 0 " +
+            "ORDER BY ts.status ASC, ts.apply_time DESC")
     List<SelectionVO> selectByTeacher(@Param("teacherId") Long teacherId);
 }

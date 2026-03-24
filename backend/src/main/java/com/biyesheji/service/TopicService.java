@@ -83,13 +83,27 @@ public class TopicService {
         return Result.ok();
     }
 
-    /** 院系审批课题（只有待审批状态可被审批） */
-    public Result<?> approveTopic(Long topicId, boolean approve, String rejectReason) {
+    /** 院系审批课题（只有待审批状态可被审批，管理员只能审批本范围内的课题） */
+    public Result<?> approveTopic(Long topicId, boolean approve, String rejectReason,
+                                  int adminRole, Long adminCollegeId, Long adminMajorId) {
         Topic topic = topicMapper.selectById(topicId);
         if (topic == null) return Result.fail("课题不存在");
         if (topic.getStatus() != 0) return Result.fail(400, "只有待审批状态的课题可以审批");
         if (!approve && (rejectReason == null || rejectReason.isBlank())) {
             return Result.fail(400, "驳回时必须填写原因");
+        }
+        // 范围校验：学院管理员只能审批本院课题，专业管理员只能审批本专业课题
+        if (adminRole == 6 && adminCollegeId != null) {
+            Long topicCollege = topic.getCollegeId();
+            if (topicCollege == null || !topicCollege.equals(adminCollegeId)) {
+                return Result.fail(403, "只能审批本学院的课题");
+            }
+        }
+        if (adminRole == 5 && adminMajorId != null) {
+            Long topicMajor = topic.getMajorId();
+            if (topicMajor == null || !topicMajor.equals(adminMajorId)) {
+                return Result.fail(403, "只能审批本专业的课题");
+            }
         }
         topic.setStatus(approve ? 1 : 3);
         if (!approve) topic.setRejectReason(rejectReason);
@@ -124,6 +138,8 @@ public class TopicService {
         selection.setStudentId(studentId);
         selection.setTopicId(topicId);
         selection.setTeacherId(topic.getTeacherId());
+        selection.setCollegeId(topic.getCollegeId());
+        selection.setMajorId(topic.getMajorId());
         selection.setYear(year);
         selection.setStatus(0); // 待导师确认
         selection.setApplyTime(LocalDateTime.now());
