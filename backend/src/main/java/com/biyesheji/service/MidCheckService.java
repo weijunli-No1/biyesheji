@@ -88,6 +88,6 @@ public class MidCheckService {
 
     /** 列表查询（教师只看自己的，管理员可看全部） */
     public Result<List<MidCheckVO>> list(Long teacherId, Integer status) {
-        return Result.ok(midCheckMapper.selectList(teacherId, status));
+        return Result.ok(midCheckMapper.selectMidCheckList(teacherId, status));
     }
 }

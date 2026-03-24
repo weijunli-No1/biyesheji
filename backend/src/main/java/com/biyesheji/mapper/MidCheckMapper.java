@@ -19,6 +19,6 @@ public interface MidCheckMapper extends BaseMapper<MidCheck> {
             "AND (#{teacherId} IS NULL OR mc.teacher_id = #{teacherId}) " +
             "AND (#{status}    IS NULL OR mc.status     = #{status}) " +
             "ORDER BY mc.create_time DESC")
-    List<MidCheckVO> selectList(@Param("teacherId") Long teacherId,
-                                @Param("status")    Integer status);
+    List<MidCheckVO> selectMidCheckList(@Param("teacherId") Long teacherId,
+                                        @Param("status")    Integer status);
 }
