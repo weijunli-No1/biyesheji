@@ -64,6 +64,11 @@
               <el-tag size="small" :type="topicStatusColors[row.status]">{{ topicStatusLabels[row.status] }}</el-tag>
             </template>
           </el-table-column>
+          <el-table-column label="申报时间" width="160">
+            <template #default="{ row }">
+              {{ row.createTime ? dayjs(row.createTime).format('YYYY-MM-DD HH:mm') : '—' }}
+            </template>
+          </el-table-column>
           <el-table-column label="操作" width="180" fixed="right">
             <template #default="{ row }">
               <el-button link type="primary" @click="viewDetail(row)">详情</el-button>
@@ -119,6 +124,7 @@
 <script setup>
 import { ref, computed, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import dayjs from 'dayjs'
 import { topicApi } from '@/api'
 import { useAuthStore } from '@/stores/auth'
 import {

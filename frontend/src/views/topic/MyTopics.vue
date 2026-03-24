@@ -28,6 +28,11 @@
             </template>
           </el-table-column>
           <el-table-column prop="rejectReason" label="驳回原因" show-overflow-tooltip />
+          <el-table-column label="申报时间" width="160">
+            <template #default="{ row }">
+              {{ row.createTime ? dayjs(row.createTime).format('YYYY-MM-DD HH:mm') : '—' }}
+            </template>
+          </el-table-column>
           <el-table-column label="操作" width="180" fixed="right">
             <template #default="{ row }">
               <el-button link type="primary" @click="$router.push(`/topics/${row.id}`)">详情</el-button>
@@ -90,6 +95,7 @@ import { ref, reactive } from 'vue'
 import { onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
 import { Plus } from '@element-plus/icons-vue'
+import dayjs from 'dayjs'
 import { topicApi } from '@/api'
 import {
   topicTypeLabels, topicTypeColors,

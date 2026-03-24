@@ -202,11 +202,8 @@ public class TopicService {
         return Result.ok(list);
     }
 
-    public Result<List<Topic>> listMyTopics(Long teacherId) {
-        var list = topicMapper.selectList(new LambdaQueryWrapper<Topic>()
-                .eq(Topic::getTeacherId, teacherId)
-                .orderByDesc(Topic::getCreateTime));
-        return Result.ok(list);
+    public Result<List<TopicVO>> listMyTopics(Long teacherId) {
+        return Result.ok(topicMapper.selectMyTopics(teacherId));
     }
 
     public Result<Topic> getTopic(Long topicId) {

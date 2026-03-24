@@ -6,8 +6,16 @@ import com.biyesheji.entity.Topic;
 import com.biyesheji.dto.TopicVO;
 import org.apache.ibatis.annotations.Param;
 import org.apache.ibatis.annotations.Select;
+import java.util.List;
 
 public interface TopicMapper extends BaseMapper<Topic> {
+
+    @Select("SELECT t.*, u.real_name AS teacher_name, " +
+            "(SELECT COUNT(*) FROM topic_selection ts WHERE ts.topic_id = t.id AND ts.status = 1) AS selected_count " +
+            "FROM topic t LEFT JOIN user u ON t.teacher_id = u.id " +
+            "WHERE t.deleted = 0 AND t.teacher_id = #{teacherId} " +
+            "ORDER BY t.create_time DESC")
+    List<TopicVO> selectMyTopics(@Param("teacherId") Long teacherId);
 
     @Select("SELECT t.*, u.real_name AS teacher_name, " +
             "(SELECT COUNT(*) FROM topic_selection ts WHERE ts.topic_id = t.id AND ts.status = 1) AS selected_count " +
