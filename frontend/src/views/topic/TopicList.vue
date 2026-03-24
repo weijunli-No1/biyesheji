@@ -33,6 +33,24 @@
       </el-form>
     </div>
 
+    <!-- 学生选题状态横幅 -->
+    <div v-if="auth.isStudent" class="page-card">
+      <el-alert v-if="!selectionStore.selection" type="info" show-icon :closable="false"
+        title="您本届尚未选题，可在下方列表中选择心仪课题" />
+      <el-alert v-else-if="selectionStore.selection.status === 0" type="warning" show-icon :closable="false"
+        :title="`您已申请课题「${selectionStore.selection.topicTitle}」，等待导师「${selectionStore.selection.teacherName}」确认`" />
+      <el-alert v-else-if="selectionStore.selection.status === 1" type="success" show-icon :closable="false"
+        :title="`您的选题「${selectionStore.selection.topicTitle}」已由导师确认，请前往撰写开题报告`">
+        <template #default>
+          <el-button size="small" type="success" style="margin-top:6px" @click="$router.push('/proposal')">
+            去写开题报告
+          </el-button>
+        </template>
+      </el-alert>
+      <el-alert v-else-if="selectionStore.selection.status === 2" type="error" show-icon :closable="false"
+        :title="`您对课题「${selectionStore.selection.topicTitle}」的申请被拒绝，可重新选题`" />
+    </div>
+
     <div class="page-card">
       <div class="toolbar">
         <span class="section-title">课题列表</span>
@@ -72,8 +90,9 @@
           <el-table-column label="操作" width="180" fixed="right">
             <template #default="{ row }">
               <el-button link type="primary" @click="viewDetail(row)">详情</el-button>
-              <!-- 学生选题 -->
-              <el-button v-if="auth.isStudent && row.status === 1 && row.selectedCount < row.maxStudents"
+              <!-- 学生选题：已发布、有名额、且本届没有进行中的选题 -->
+              <el-button
+                v-if="auth.isStudent && row.status === 1 && row.selectedCount < row.maxStudents && canStudentSelect"
                 link type="success" @click="doSelect(row)">选题</el-button>
               <!-- 管理员审批 -->
               <template v-if="auth.isManager && row.status === 0">
@@ -113,8 +132,15 @@
           <el-descriptions-item label="选题要求">{{ selected.requirement || '—' }}</el-descriptions-item>
           <el-descriptions-item label="课题简介">{{ selected.description || '—' }}</el-descriptions-item>
         </el-descriptions>
-        <div style="margin-top:20px" v-if="auth.isStudent && selected.status === 1 && selected.selectedCount < selected.maxStudents">
+        <!-- 申请按钮：同样需要 canStudentSelect -->
+        <div style="margin-top:20px"
+          v-if="auth.isStudent && selected.status === 1 && selected.selectedCount < selected.maxStudents && canStudentSelect">
           <el-button type="primary" @click="doSelect(selected); drawerVisible = false">申请该课题</el-button>
+        </div>
+        <!-- 已有选题时在抽屉内提示 -->
+        <div v-else-if="auth.isStudent && !canStudentSelect" style="margin-top:20px">
+          <el-alert type="info" :closable="false"
+            :title="selectionStore.selection?.status === 1 ? '您已完成选题，无需再次申请' : '您已提交选题申请，等待导师确认'" />
         </div>
       </template>
     </el-drawer>
@@ -127,12 +153,14 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import dayjs from 'dayjs'
 import { topicApi } from '@/api'
 import { useAuthStore } from '@/stores/auth'
+import { useSelectionStore } from '@/stores/selection'
 import {
   topicStatusLabels, topicStatusColors,
   topicTypeLabels, topicTypeColors
 } from '@/utils/statusConfig'
 
 const auth = useAuthStore()
+const selectionStore = useSelectionStore()
 const loading = ref(false)
 const list = ref([])
 const total = ref(0)
@@ -144,13 +172,16 @@ const yearOptions = [curYear - 1, curYear, curYear + 1]
 
 const query = ref({
   page: 1, size: 10, keyword: '',
-  // 学生只看已发布课题；管理员初始不加 status 过滤，以便看到待审批
   status: auth.isStudent ? 1 : undefined,
-  // 学生/教师按当前年份查；管理员初始不限年份，可通过下拉筛选
   year: auth.isManager ? undefined : curYear
 })
 
-// Responsive drawer width
+// 学生是否可以选题：没有选题，或上次申请被拒绝(2)/已解除(3)
+const canStudentSelect = computed(() => {
+  const s = selectionStore.selection
+  return !s || s.status === 2 || s.status === 3
+})
+
 const drawerSize = computed(() => window.innerWidth <= 640 ? '90%' : '480px')
 
 async function loadData() {
@@ -182,6 +213,8 @@ async function doSelect(row) {
   await ElMessageBox.confirm(`确认申请课题「${row.title}」？`, '选题确认', { type: 'info' })
   await topicApi.select(row.id, query.value.year)
   ElMessage.success('选题申请已提交，等待导师确认')
+  // 刷新选题状态，使横幅和按钮立即更新
+  await selectionStore.fetchMySelection(curYear)
   loadData()
 }
 
@@ -202,5 +235,10 @@ async function doApprove(row, approve) {
   loadData()
 }
 
-onMounted(loadData)
+onMounted(async () => {
+  if (auth.isStudent) {
+    await selectionStore.fetchMySelection(curYear)
+  }
+  loadData()
+})
 </script>

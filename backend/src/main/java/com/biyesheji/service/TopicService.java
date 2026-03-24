@@ -48,12 +48,12 @@ public class TopicService {
         if (existing.getStatus() != 0 && existing.getStatus() != 3) {
             return Result.fail(400, "只有待审批或已驳回的课题可以修改");
         }
-        // 如果已有学生确认选题，禁止修改
-        long confirmedCount = selectionMapper.selectCount(new LambdaQueryWrapper<TopicSelection>()
+        // 已有学生申请或确认选题时，禁止修改
+        long activeCount = selectionMapper.selectCount(new LambdaQueryWrapper<TopicSelection>()
                 .eq(TopicSelection::getTopicId, topicId)
-                .eq(TopicSelection::getStatus, 1)); // 已确认
-        if (confirmedCount > 0) {
-            return Result.fail(400, "已有学生确认选题，无法修改课题");
+                .in(TopicSelection::getStatus, List.of(0, 1))); // 待确认或已确认
+        if (activeCount > 0) {
+            return Result.fail(400, "已有学生申请或确认选题，无法修改课题");
         }
 
         topic.setId(topicId);
@@ -75,10 +75,10 @@ public class TopicService {
         if (topic.getStatus() != 0 && topic.getStatus() != 3) {
             return Result.fail(400, "只有待审批或已驳回的课题可以删除");
         }
-        long confirmed = selectionMapper.selectCount(new LambdaQueryWrapper<TopicSelection>()
+        long activeSelections = selectionMapper.selectCount(new LambdaQueryWrapper<TopicSelection>()
                 .eq(TopicSelection::getTopicId, topicId)
-                .eq(TopicSelection::getStatus, 1));
-        if (confirmed > 0) return Result.fail(400, "已有学生确认选题，无法删除");
+                .in(TopicSelection::getStatus, List.of(0, 1))); // 待确认或已确认
+        if (activeSelections > 0) return Result.fail(400, "已有学生申请或确认选题，无法删除");
         topicMapper.deleteById(topicId);
         return Result.ok();
     }
